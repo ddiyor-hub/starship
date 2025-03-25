@@ -2,6 +2,8 @@ import processing.serial.*;
 
 Serial port;
 PImage shipImage;
+PImage bossImage;
+PImage asteroidImage;
 float shipX, shipY;
 float shipSpeedX = 0, shipSpeedY = 0;
 float maxSpeed = 5;
@@ -196,8 +198,16 @@ class Boss {
   }
 
   void display() {
-    fill(255, 0, 0);
-    rect(pos.x - 50, pos.y - 30, 100, 60);
+    if (bossImage != null) {
+      pushMatrix();
+      translate(pos.x, pos.y);
+      imageMode(CENTER);
+      image(bossImage, 0, 0, 100, 60);
+      popMatrix();
+    } else {
+      fill(255, 0, 0);
+      rect(pos.x - 50, pos.y - 30, 100, 60);
+    }
     if (phase >= 2) {
       fill(255, 0, 0, 150);
       ellipse(pos.x, pos.y, 120, 120);
@@ -237,6 +247,8 @@ void setup() {
   bossActive = false;
 
   shipImage = loadImage("starship.png");
+  bossImage = loadImage("boss1.png");
+  asteroidImage = loadImage("asteroid1.png");
 
   for (int i = 0; i < 200; i++) {
     stars.add(new PVector(random(width), random(height), random(1, 3)));
@@ -365,11 +377,20 @@ void drawShip() {
 }
 
 void drawAsteroids() {
-  fill(150);
   for (int i = 0; i < asteroids.size(); i++) {
     Asteroid asteroid = asteroids.get(i);
     float diameter = asteroid.size == 3 ? 40 : (asteroid.size == 2 ? 30 : 20);
-    ellipse(asteroid.pos.x, asteroid.pos.y, diameter, diameter);
+    
+    if (asteroidImage != null) {
+      pushMatrix();
+      translate(asteroid.pos.x, asteroid.pos.y);
+      imageMode(CENTER);
+      image(asteroidImage, 0, 0, diameter, diameter);
+      popMatrix();
+    } else {
+      fill(150);
+      ellipse(asteroid.pos.x, asteroid.pos.y, diameter, diameter);
+    }
   }
 }
 
@@ -504,19 +525,18 @@ void checkBulletCollisions() {
           superLaserPoints += 3;
         }
         if (superLaserPoints >= 200) canUseSuperLaser = true;
-        break; // Выходим из цикла по астероидам после попадания
+        break;
       }
     }
   }
 
-  // Удаляем пули и астероиды после завершения цикла
   for (int i : bulletsToRemove) {
     if (i >= 0 && i < bullets.size()) bullets.remove(i);
   }
   for (int j : asteroidsToRemove) {
     if (j >= 0 && j < asteroids.size()) asteroids.remove(j);
   }
-  asteroids.addAll(newAsteroids); // Добавляем новые астероиды
+  asteroids.addAll(newAsteroids);
 }
 
 void updateAsteroids() {
@@ -563,9 +583,38 @@ void drawSuperLaser() {
   pushMatrix();
   translate(shipX, shipY);
   rotate(shipAngle);
-  fill(0, 255, 255, 150);
-  rect(-25, -height, 50, height);
+
+  // Внешнее свечение (широкое, слабое)
+  noStroke();
+  fill(0, 200, 255, 40);
+  rect(-40, -height, 80, height + 20); // Более широкая область свечения
+
+  // Средний слой (с мерцанием)
+  for (int y = -height; y < 0; y += 5) {
+    float noiseVal = noise(frameCount * 0.05 + y * 0.01); // Мерцание с помощью шума
+    float flicker = map(noiseVal, 0, 1, 80, 120); // Изменение прозрачности
+    fill(0, 220, 255, flicker);
+    rect(-30, y, 60, 10);
+  }
+
+  // Яркое ядро луча
+  fill(0, 255, 255, 200);
+  rect(-15, -height, 30, height + 10);
+
+  // Центральная белая линия (имитация интенсивного света)
+  fill(255, 255, 255, 150);
+  rect(-5, -height, 10, height + 5);
+
   popMatrix();
+
+  // Добавляем частицы вдоль луча для динамики
+  if (frameCount % 3 == 0) { // Реже создаем частицы для оптимизации
+    for (int i = 0; i < 5; i++) {
+      float particleX = shipX + random(-30, 30);
+      float particleY = shipY - random(0, height);
+      particles.add(new Particle(particleX, particleY));
+    }
+  }
 
   ArrayList<Integer> asteroidsToRemove = new ArrayList<Integer>();
   ArrayList<Asteroid> newAsteroids = new ArrayList<Asteroid>();
@@ -578,10 +627,12 @@ void drawSuperLaser() {
       }
       if (boss.health <= 0) {
         bossActive = false;
+        float lastBossX = boss.pos.x;
+        float lastBossY = boss.pos.y;
         boss = null;
         score += 200;
         for (int k = 0; k < 50; k++) {
-          particles.add(new Particle(boss.pos.x, boss.pos.y));
+          particles.add(new Particle(lastBossX, lastBossY));
         }
         gameWon = true;
       }
@@ -613,11 +664,10 @@ void drawSuperLaser() {
     }
   }
 
-  // Удаляем астероиды после цикла
   for (int i : asteroidsToRemove) {
     if (i >= 0 && i < asteroids.size()) asteroids.remove(i);
   }
-  asteroids.addAll(newAsteroids); // Добавляем новые астероиды
+  asteroids.addAll(newAsteroids);
 }
 
 void checkCollisions() {
